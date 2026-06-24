@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+venv/
+env/
+.venv/
+auth/
+
+# MLflow
+mlruns/
+
+# Generated outputs — do not commit charts or trained models
+outputs/*.png
+outputs/*.jpg
+isolation_forest_model.pkl
+stability_chart.png
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb

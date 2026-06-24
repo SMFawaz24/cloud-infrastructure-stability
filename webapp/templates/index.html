@@ -1,0 +1,974 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cloud Infrastructure Stability Analysis</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    /* ── Reset & base ──────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #080c14;
+      --surface:   #0e1520;
+      --card:      #121c2e;
+      --border:    #1e2d45;
+      --accent:    #3b82f6;
+      --accent2:   #06b6d4;
+      --green:     #10b981;
+      --amber:     #f59e0b;
+      --red:       #ef4444;
+      --purple:    #8b5cf6;
+      --text:      #e2e8f0;
+      --muted:     #64748b;
+      --mono:      'JetBrains Mono', monospace;
+      --sans:      'Syne', sans-serif;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 14px;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* ── Scrollbar ──────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* ── Layout ─────────────────────────────────────────────────── */
+    .sidebar {
+      position: fixed; top: 0; left: 0;
+      width: 220px; height: 100vh;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      padding: 28px 0; z-index: 100;
+    }
+
+    .logo {
+      padding: 0 20px 28px;
+      border-bottom: 1px solid var(--border);
+    }
+    .logo-tag {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--accent);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+    .logo-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.3;
+    }
+
+    .nav { padding: 20px 12px; flex: 1; }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 12px; border-radius: 8px;
+      color: var(--muted); font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: all .2s;
+      margin-bottom: 2px; border: none; background: none;
+      width: 100%; text-align: left;
+    }
+    .nav-item:hover   { color: var(--text); background: var(--border); }
+    .nav-item.active  { color: var(--accent); background: rgba(59,130,246,.12); }
+    .nav-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+
+    .sidebar-footer {
+      padding: 16px 20px;
+      border-top: 1px solid var(--border);
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    .main { margin-left: 220px; padding: 32px 36px; }
+
+    /* ── Page header ─────────────────────────────────────────────── */
+    .page-header {
+      display: flex; align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 32px;
+    }
+    .page-title { font-size: 26px; font-weight: 800; color: var(--text); letter-spacing: -.3px; }
+    .page-subtitle { color: var(--muted); font-size: 13px; margin-top: 4px; }
+    .status-badge {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 16px; border-radius: 999px;
+      background: rgba(16,185,129,.1);
+      border: 1px solid rgba(16,185,129,.3);
+      font-size: 12px; font-weight: 600; color: var(--green);
+      font-family: var(--mono);
+    }
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--green); animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+    /* ── Section ─────────────────────────────────────────────────── */
+    .section { display: none; }
+    .section.active { display: block; }
+
+    /* ── KPI cards ───────────────────────────────────────────────── */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px; margin-bottom: 28px;
+    }
+    .kpi {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px; padding: 20px;
+      position: relative; overflow: hidden;
+    }
+    .kpi::before {
+      content: ''; position: absolute;
+      top: 0; left: 0; right: 0; height: 3px;
+    }
+    .kpi.blue::before   { background: var(--accent); }
+    .kpi.cyan::before   { background: var(--accent2); }
+    .kpi.green::before  { background: var(--green); }
+    .kpi.amber::before  { background: var(--amber); }
+    .kpi.red::before    { background: var(--red); }
+    .kpi.purple::before { background: var(--purple); }
+
+    .kpi-label { font-size: 11px; font-weight: 600; color: var(--muted);
+                 text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
+    .kpi-value { font-size: 32px; font-weight: 800; font-family: var(--mono); line-height: 1; }
+    .kpi.blue   .kpi-value { color: var(--accent); }
+    .kpi.cyan   .kpi-value { color: var(--accent2); }
+    .kpi.green  .kpi-value { color: var(--green); }
+    .kpi.amber  .kpi-value { color: var(--amber); }
+    .kpi.red    .kpi-value { color: var(--red); }
+    .kpi.purple .kpi-value { color: var(--purple); }
+    .kpi-sub { font-size: 11px; color: var(--muted); margin-top: 6px; }
+
+    /* ── Cards ───────────────────────────────────────────────────── */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px; padding: 24px;
+      margin-bottom: 20px;
+    }
+    .card-title {
+      font-size: 13px; font-weight: 700;
+      color: var(--text); letter-spacing: .3px;
+      margin-bottom: 6px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .card-title .pill {
+      font-size: 10px; font-family: var(--mono);
+      padding: 2px 8px; border-radius: 999px;
+      background: rgba(59,130,246,.15); color: var(--accent);
+    }
+    .card-desc { font-size: 12px; color: var(--muted); margin-bottom: 20px; }
+    .chart-wrap { position: relative; height: 220px; }
+    .chart-wrap.tall { height: 300px; }
+    .chart-wrap.short { height: 160px; }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+
+    /* ── Alerts table ─────────────────────────────────────────────── */
+    .alerts-header {
+      display: flex; align-items: center;
+      justify-content: space-between; margin-bottom: 16px;
+    }
+    .filter-row { display: flex; gap: 8px; }
+    .filter-btn {
+      padding: 5px 12px; border-radius: 6px;
+      border: 1px solid var(--border); background: none;
+      color: var(--muted); font-size: 12px; font-family: var(--sans);
+      font-weight: 600; cursor: pointer; transition: all .2s;
+    }
+    .filter-btn:hover, .filter-btn.active {
+      background: rgba(59,130,246,.15);
+      border-color: var(--accent); color: var(--accent);
+    }
+
+    table { width: 100%; border-collapse: collapse; }
+    thead th {
+      font-size: 11px; font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 1px;
+      padding: 8px 12px; text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    tbody tr {
+      border-bottom: 1px solid rgba(30,45,69,.6);
+      transition: background .15s;
+    }
+    tbody tr:hover { background: rgba(59,130,246,.04); }
+    tbody td {
+      padding: 11px 12px; font-size: 12px;
+      font-family: var(--mono); color: var(--text);
+    }
+    td.ts { color: var(--muted); }
+
+    .badge {
+      display: inline-block; padding: 2px 9px;
+      border-radius: 999px; font-size: 10px;
+      font-weight: 700; letter-spacing: .5px;
+    }
+    .badge.CRITICAL { background: rgba(239,68,68,.15);   color: var(--red);    border: 1px solid rgba(239,68,68,.3); }
+    .badge.HIGH     { background: rgba(245,158,11,.15);  color: var(--amber);  border: 1px solid rgba(245,158,11,.3); }
+    .badge.MODERATE { background: rgba(59,130,246,.15);  color: var(--accent); border: 1px solid rgba(59,130,246,.3); }
+
+    .check { color: var(--green); } .cross { color: var(--muted); }
+
+    /* ── Stats table ─────────────────────────────────────────────── */
+    .stat-table th { width: 120px; }
+    .stat-val { color: var(--accent2); }
+
+    /* ── Correlation matrix ──────────────────────────────────────── */
+    #corrGrid {
+      display: grid; grid-template-columns: repeat(5, 1fr);
+      gap: 3px; margin-top: 12px;
+    }
+    .corr-cell {
+      aspect-ratio: 1; border-radius: 5px;
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--mono); font-size: 11px; font-weight: 600;
+    }
+    .corr-label {
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 700; color: var(--muted);
+    }
+
+    /* ── Method comparison bar ───────────────────────────────────── */
+    .compare-row {
+      display: flex; align-items: center;
+      gap: 14px; margin-bottom: 14px;
+    }
+    .compare-label { width: 110px; font-size: 12px; color: var(--muted); font-weight: 600; }
+    .compare-bars { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+    .bar-row { display: flex; align-items: center; gap: 10px; }
+    .bar-name { width: 60px; font-size: 11px; color: var(--muted); font-family: var(--mono); }
+    .bar-track { flex: 1; background: var(--border); border-radius: 99px; height: 8px; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 99px; transition: width 1s cubic-bezier(.4,0,.2,1); }
+    .bar-val { width: 42px; font-size: 11px; font-family: var(--mono); text-align: right; }
+
+    /* ── Loading ─────────────────────────────────────────────────── */
+    .loading {
+      display: flex; align-items: center; justify-content: center;
+      height: 200px; color: var(--muted); font-size: 13px;
+      gap: 10px;
+    }
+    .spinner {
+      width: 18px; height: 18px; border: 2px solid var(--border);
+      border-top-color: var(--accent); border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Responsive ──────────────────────────────────────────────── */
+    @media (max-width: 1100px) {
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+      .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Sidebar ────────────────────────────────────────────────── -->
+<aside class="sidebar">
+  <div class="logo">
+    <div class="logo-tag">EWS v1.0</div>
+    <div class="logo-title">Cloud Infrastructure<br>Stability Analysis</div>
+  </div>
+
+  <nav class="nav">
+    <button class="nav-item active" data-section="overview">
+      <span class="nav-dot"></span> Overview
+    </button>
+    <button class="nav-item" data-section="timeseries">
+      <span class="nav-dot"></span> Time Series
+    </button>
+    <button class="nav-item" data-section="alerts">
+      <span class="nav-dot"></span> Alerts
+    </button>
+    <button class="nav-item" data-section="analytics">
+      <span class="nav-dot"></span> Analytics
+    </button>
+    <button class="nav-item" data-section="statistics">
+      <span class="nav-dot"></span> Statistics
+    </button>
+  </nav>
+
+  <div class="sidebar-footer">
+    Shreyans Modi<br>RA2311026010720<br><br>
+    Syed Mohammad Fawaz<br>RA2311026010780
+  </div>
+</aside>
+
+<!-- ── Main ──────────────────────────────────────────────────── -->
+<main class="main">
+
+  <div class="page-header">
+    <div>
+      <div class="page-title">Early Warning System</div>
+      <div class="page-subtitle">200-point cloud metric simulation &nbsp;·&nbsp; Z-Score + Isolation Forest anomaly detection</div>
+    </div>
+    <div class="status-badge">
+      <div class="status-dot"></div>
+      PIPELINE ACTIVE
+    </div>
+  </div>
+
+  <!-- ── Overview ─────────────────────────────────────────────── -->
+  <section id="overview" class="section active">
+
+    <div id="kpiGrid" class="kpi-grid">
+      <div class="loading"><div class="spinner"></div> Loading...</div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">CPU Usage <span class="pill">200 pts</span></div>
+        <div class="card-desc">One-minute readings over the simulation window</div>
+        <div class="chart-wrap"><canvas id="overviewCpu"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Memory Usage <span class="pill">200 pts</span></div>
+        <div class="card-desc">Memory consumption as % of total available</div>
+        <div class="chart-wrap"><canvas id="overviewMem"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Disk Usage <span class="pill">200 pts</span></div>
+        <div class="card-desc">Persistent storage utilisation over time</div>
+        <div class="chart-wrap"><canvas id="overviewDisk"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Network Latency <span class="pill">ms</span></div>
+        <div class="card-desc">Round-trip network response time in milliseconds</div>
+        <div class="chart-wrap"><canvas id="overviewLat"></canvas></div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ── Time Series ───────────────────────────────────────────── -->
+  <section id="timeseries" class="section">
+
+    <div class="card">
+      <div class="card-title">CPU Usage — Annotated Anomalies</div>
+      <div class="card-desc">Purple = injected ground truth &nbsp;·&nbsp; Red = Z-Score alert &nbsp;·&nbsp; Orange = Isolation Forest alert</div>
+      <div class="chart-wrap tall"><canvas id="tsCpu"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Memory Usage — Annotated Anomalies</div>
+      <div class="card-desc">Sudden spikes in memory often indicate memory leaks or runaway processes</div>
+      <div class="chart-wrap tall"><canvas id="tsMem"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Disk Usage — Annotated Anomalies</div>
+      <div class="card-desc">Disk saturation can cause write failures and service degradation</div>
+      <div class="chart-wrap tall"><canvas id="tsDisk"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Network Latency — Annotated Anomalies</div>
+      <div class="card-desc">Latency spikes indicate network congestion, packet loss, or upstream issues</div>
+      <div class="chart-wrap tall"><canvas id="tsLat"></canvas></div>
+    </div>
+
+  </section>
+
+  <!-- ── Alerts ────────────────────────────────────────────────── -->
+  <section id="alerts" class="section">
+
+    <div class="card">
+      <div class="alerts-header">
+        <div class="card-title" style="margin:0">All Detected Alerts</div>
+        <div class="filter-row">
+          <button class="filter-btn active" data-filter="all">All</button>
+          <button class="filter-btn" data-filter="CRITICAL">Critical</button>
+          <button class="filter-btn" data-filter="HIGH">High</button>
+          <button class="filter-btn" data-filter="MODERATE">Moderate</button>
+        </div>
+      </div>
+      <div id="alertTableWrap">
+        <div class="loading"><div class="spinner"></div> Loading alerts...</div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ── Analytics ─────────────────────────────────────────────── -->
+  <section id="analytics" class="section">
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">Detection Performance</div>
+        <div class="card-desc">Recall and precision for both methods against ground truth</div>
+        <div id="perfBars"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Severity Breakdown</div>
+        <div class="card-desc">Distribution of alert severities per detection method</div>
+        <div class="chart-wrap"><canvas id="severityChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">Z-Score Over Time</div>
+        <div class="card-desc">Dashed line = 2.5 threshold. Points above trigger Z-Score alerts.</div>
+        <div class="chart-wrap tall"><canvas id="zscoreChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Metric Correlation Matrix</div>
+        <div class="card-desc">Pearson correlation between the four cloud metrics</div>
+        <div id="corrGrid"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Method Agreement</div>
+      <div class="card-desc">Alerts flagged by Z-Score only, Isolation Forest only, or both detectors</div>
+      <div class="chart-wrap short"><canvas id="agreementChart"></canvas></div>
+    </div>
+
+  </section>
+
+  <!-- ── Statistics ─────────────────────────────────────────────── -->
+  <section id="statistics" class="section">
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">Descriptive Statistics — All Metrics</div>
+        <div class="card-desc">Computed over the full 200-point simulation</div>
+        <div id="statsTableWrap">
+          <div class="loading"><div class="spinner"></div> Loading...</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Detection Summary</div>
+        <div class="card-desc">Ground truth vs detected — overall pipeline performance</div>
+        <div id="summaryTableWrap">
+          <div class="loading"><div class="spinner"></div> Loading...</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Metric Distribution — Box Plot (simulated)</div>
+      <div class="card-desc">P25, median, P75, min, max for each metric including anomaly points</div>
+      <div class="chart-wrap"><canvas id="boxChart"></canvas></div>
+    </div>
+
+  </section>
+
+</main>
+
+<script>
+// ── Global data store ──────────────────────────────────────────
+const D = {};
+
+// ── Colour palette ─────────────────────────────────────────────
+const C = {
+  cpu    : '#3b82f6',
+  mem    : '#10b981',
+  disk   : '#f59e0b',
+  lat    : '#c084fc',
+  inj    : '#8b5cf6',
+  zs     : '#ef4444',
+  ifo    : '#f97316',
+  grid   : 'rgba(30,45,69,.5)',
+  text   : '#64748b',
+};
+
+// ── Chart.js global defaults ───────────────────────────────────
+Chart.defaults.color          = C.text;
+Chart.defaults.borderColor    = C.grid;
+Chart.defaults.font.family    = "'JetBrains Mono', monospace";
+Chart.defaults.font.size      = 11;
+
+// ── Helper: thin line dataset ──────────────────────────────────
+function lineDs(label, data, color, opts = {}) {
+  return {
+    label, data,
+    borderColor: color,
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    pointRadius: 0,
+    tension: 0.2,
+    ...opts,
+  };
+}
+
+// ── Helper: scatter anomaly points ─────────────────────────────
+function anomalyDs(label, fullData, flags, color, symbol) {
+  const pts = [];
+  flags.forEach((f, i) => {
+    if (f) pts.push({ x: i, y: fullData[i] });
+  });
+  return {
+    label,
+    type: 'scatter',
+    data: pts,
+    parsing: false,
+    backgroundColor: color,
+    borderColor: '#fff',
+    borderWidth: 1,
+    pointRadius: 7,
+    pointStyle: symbol,
+    order: 0,
+  };
+}
+
+// ── Helper: standard axes ─────────────────────────────────────
+function axes(yLabel, yMax) {
+  return {
+    x: {
+      ticks: { maxTicksLimit: 10, color: C.text },
+      grid: { color: C.grid },
+    },
+    y: {
+      title: { display: true, text: yLabel, color: C.text },
+      max: yMax,
+      grid: { color: C.grid },
+      ticks: { color: C.text },
+    },
+  };
+}
+
+function mkChart(id, config) {
+  const ctx = document.getElementById(id);
+  if (!ctx) return;
+  return new Chart(ctx, config);
+}
+
+// ── Navigation ────────────────────────────────────────────────
+document.querySelectorAll('.nav-item').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.section).classList.add('active');
+  });
+});
+
+// ── Fetch helpers ─────────────────────────────────────────────
+async function get(url) {
+  const r = await fetch(url);
+  return r.json();
+}
+
+// ══════════════════════════════════════════════════════════════
+// OVERVIEW
+// ══════════════════════════════════════════════════════════════
+
+async function loadOverview() {
+  const [ov, ts] = await Promise.all([get('/api/overview'), get('/api/timeseries')]);
+  D.ts = ts; D.ov = ov;
+
+  // KPI cards
+  const kpis = [
+    { label:'Data Points',       value: ov.total_points,       sub:'1 reading per minute',          cls:'blue' },
+    { label:'Injected Anomalies',value: ov.injected_anomalies, sub:'Ground truth events',           cls:'purple' },
+    { label:'Z-Score Detected',  value: ov.zscore_detected,    sub:`Recall ${ov.zscore_recall_pct}% · Precision ${ov.zscore_precision}%`, cls:'red' },
+    { label:'IForest Detected',  value: ov.iforest_detected,   sub:`Recall ${ov.iforest_recall_pct}% · Precision ${ov.iforest_precision}%`, cls:'amber' },
+    { label:'Both Agreed',       value: ov.both_detected,      sub:'High-confidence alerts',        cls:'green' },
+    { label:'Z-Score Recall',    value: ov.zscore_recall_pct+'%', sub:'True positive rate',         cls:'cyan' },
+    { label:'IForest Recall',    value: ov.iforest_recall_pct+'%', sub:'True positive rate',        cls:'cyan' },
+    { label:'IForest Precision', value: ov.iforest_precision+'%', sub:'Correct out of detected',   cls:'green' },
+  ];
+
+  document.getElementById('kpiGrid').innerHTML = kpis.map(k => `
+    <div class="kpi ${k.cls}">
+      <div class="kpi-label">${k.label}</div>
+      <div class="kpi-value">${k.value}</div>
+      <div class="kpi-sub">${k.sub}</div>
+    </div>`).join('');
+
+  // Small overview sparklines
+  const sparkCfg = (data, color, yMax) => ({
+    type: 'line',
+    data: { labels: ts.labels, datasets: [lineDs('', data, color)] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: axes('', yMax),
+      animation: { duration: 600 },
+    }
+  });
+
+  mkChart('overviewCpu',  sparkCfg(ts.cpu,     C.cpu,  110));
+  mkChart('overviewMem',  sparkCfg(ts.memory,  C.mem,  110));
+  mkChart('overviewDisk', sparkCfg(ts.disk,    C.disk, 110));
+  mkChart('overviewLat',  sparkCfg(ts.latency, C.lat,  520));
+}
+
+// ══════════════════════════════════════════════════════════════
+// TIME SERIES
+// ══════════════════════════════════════════════════════════════
+
+function buildAnnotatedChart(id, data, color, yMax, yLabel) {
+  const ts = D.ts;
+  mkChart(id, {
+    type: 'line',
+    data: {
+      labels: ts.labels,
+      datasets: [
+        lineDs(yLabel, data, color),
+        anomalyDs('Injected', data, ts.injected,      C.inj, 'star'),
+        anomalyDs('Z-Score',  data, ts.zscore_flags,  C.zs,  'circle'),
+        anomalyDs('IForest',  data, ts.iforest_flags, C.ifo, 'crossRot'),
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          display: true,
+          labels: { usePointStyle: true, pointStyleWidth: 10, color: C.text, font: { size: 11 } }
+        },
+        tooltip: {
+          callbacks: {
+            label: ctx => `${ctx.dataset.label}: ${
+              ctx.raw?.y !== undefined ? ctx.raw.y : ctx.formattedValue
+            }`
+          }
+        }
+      },
+      scales: axes(yLabel, yMax),
+      animation: { duration: 800 },
+    }
+  });
+}
+
+function loadTimeSeries() {
+  if (!D.ts) return;
+  buildAnnotatedChart('tsCpu',  D.ts.cpu,     C.cpu,  110, 'CPU %');
+  buildAnnotatedChart('tsMem',  D.ts.memory,  C.mem,  110, 'Memory %');
+  buildAnnotatedChart('tsDisk', D.ts.disk,    C.disk, 110, 'Disk %');
+  buildAnnotatedChart('tsLat',  D.ts.latency, C.lat,  520, 'Latency ms');
+}
+
+// ══════════════════════════════════════════════════════════════
+// ALERTS TABLE
+// ══════════════════════════════════════════════════════════════
+
+let allAlerts = [];
+
+async function loadAlerts() {
+  const data = await get('/api/alerts');
+  allAlerts  = data.alerts;
+  renderAlerts('all');
+
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderAlerts(btn.dataset.filter);
+    });
+  });
+}
+
+function renderAlerts(filter) {
+  const rows = filter === 'all' ? allAlerts : allAlerts.filter(a => a.severity === filter);
+  document.getElementById('alertTableWrap').innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>Timestamp</th>
+          <th>CPU %</th>
+          <th>Memory %</th>
+          <th>Disk %</th>
+          <th>Latency ms</th>
+          <th>Severity</th>
+          <th>Z-Score</th>
+          <th>IForest</th>
+          <th>Ground Truth</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map(a => `
+        <tr>
+          <td class="ts">${a.timestamp}</td>
+          <td>${a.cpu}</td>
+          <td>${a.memory}</td>
+          <td>${a.disk}</td>
+          <td>${a.latency}</td>
+          <td><span class="badge ${a.severity}">${a.severity}</span></td>
+          <td>${a.zscore   ? '<span class="check">Yes</span>' : '<span class="cross">No</span>'}</td>
+          <td>${a.iforest  ? '<span class="check">Yes</span>' : '<span class="cross">No</span>'}</td>
+          <td>${a.ground_truth ? '<span class="check">Injected</span>' : '<span class="cross">—</span>'}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+    <div style="font-size:11px;color:var(--muted);margin-top:12px;font-family:var(--mono)">
+      Showing ${rows.length} of ${allAlerts.length} total alerts
+    </div>`;
+}
+
+// ══════════════════════════════════════════════════════════════
+// ANALYTICS
+// ══════════════════════════════════════════════════════════════
+
+async function loadAnalytics() {
+  const [sev, ov, zs, corr] = await Promise.all([
+    get('/api/severity_breakdown'),
+    Promise.resolve(D.ov),
+    get('/api/zscores'),
+    get('/api/correlation'),
+  ]);
+
+  // Performance bars
+  const metrics = [
+    { label: 'Recall',    zVal: ov.zscore_recall_pct,   iVal: ov.iforest_recall_pct },
+    { label: 'Precision', zVal: ov.zscore_precision,    iVal: ov.iforest_precision  },
+  ];
+  document.getElementById('perfBars').innerHTML = metrics.map(m => `
+    <div class="compare-row">
+      <div class="compare-label">${m.label}</div>
+      <div class="compare-bars">
+        <div class="bar-row">
+          <div class="bar-name">Z-Score</div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width:${m.zVal}%;background:${C.zs}"></div>
+          </div>
+          <div class="bar-val" style="color:${C.zs}">${m.zVal}%</div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-name">IForest</div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width:${m.iVal}%;background:${C.ifo}"></div>
+          </div>
+          <div class="bar-val" style="color:${C.ifo}">${m.iVal}%</div>
+        </div>
+      </div>
+    </div>`).join('');
+
+  // Severity chart
+  mkChart('severityChart', {
+    type: 'bar',
+    data: {
+      labels: ['Critical', 'High', 'Moderate'],
+      datasets: [
+        { label: 'Z-Score',  data: [sev.zscore.CRITICAL,  sev.zscore.HIGH,  sev.zscore.MODERATE],  backgroundColor: 'rgba(239,68,68,.7)'  },
+        { label: 'IForest',  data: [sev.iforest.CRITICAL, sev.iforest.HIGH, sev.iforest.MODERATE], backgroundColor: 'rgba(249,115,22,.7)' },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: C.text } } },
+      scales: {
+        x: { grid: { color: C.grid }, ticks: { color: C.text } },
+        y: { grid: { color: C.grid }, ticks: { color: C.text } },
+      }
+    }
+  });
+
+  // Z-Score over time (max across all metrics)
+  const zsMax = zs.cpu.map((_, i) =>
+    Math.max(Math.abs(zs.cpu[i]), Math.abs(zs.memory[i]),
+             Math.abs(zs.disk[i]), Math.abs(zs.latency[i]))
+  );
+
+  mkChart('zscoreChart', {
+    type: 'line',
+    data: {
+      labels: zs.labels,
+      datasets: [
+        { ...lineDs('Max |Z|', zsMax, C.accent), fill: { target: 'origin', above: 'rgba(59,130,246,.08)' } },
+        { label: 'Threshold (2.5)', data: Array(zsMax.length).fill(2.5),
+          borderColor: C.zs, borderWidth: 1.5, borderDash: [4,3], pointRadius: 0,
+          backgroundColor: 'transparent' },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: C.text } } },
+      scales: axes('|Z-Score|', Math.max(...zsMax) + .5),
+    }
+  });
+
+  // Correlation matrix
+  const labels = corr.labels;
+  const colours = [C.cpu, C.mem, C.disk, C.lat];
+  const grid = document.getElementById('corrGrid');
+  // Header row
+  grid.innerHTML = '<div class="corr-label"></div>' +
+    labels.map((l, i) => `<div class="corr-label" style="color:${colours[i]}">${l}</div>`).join('');
+
+  corr.matrix.forEach((row, ri) => {
+    grid.innerHTML += `<div class="corr-label" style="color:${colours[ri]}">${labels[ri]}</div>`;
+    row.forEach((val, ci) => {
+      const abs   = Math.abs(val);
+      const r     = ri === ci ? 40 : Math.round(abs * 40);
+      const g     = ri === ci ? 60 : Math.round(abs * 30);
+      const b     = ri === ci ? 100 : Math.round(abs * 80);
+      const alpha = ri === ci ? 0.35 : abs * 0.6 + 0.1;
+      const fg    = abs > 0.5 ? '#fff' : C.text;
+      grid.innerHTML += `
+        <div class="corr-cell" style="background:rgba(${r},${g},${b},${alpha});color:${fg}">
+          ${val.toFixed(2)}
+        </div>`;
+    });
+  });
+
+  // Method agreement doughnut
+  const both   = D.ov.both_detected;
+  const zOnly  = D.ov.zscore_detected  - both;
+  const ifOnly = D.ov.iforest_detected - both;
+
+  mkChart('agreementChart', {
+    type: 'doughnut',
+    data: {
+      labels: ['Z-Score only', 'IForest only', 'Both agreed'],
+      datasets: [{
+        data: [zOnly, ifOnly, both],
+        backgroundColor: [C.zs, C.ifo, C.green],
+        borderColor: 'var(--card)', borderWidth: 3,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'right', labels: { color: C.text, usePointStyle: true } }
+      }
+    }
+  });
+}
+
+// ══════════════════════════════════════════════════════════════
+// STATISTICS
+// ══════════════════════════════════════════════════════════════
+
+async function loadStatistics() {
+  const [stats, ov] = await Promise.all([get('/api/statistics'), Promise.resolve(D.ov)]);
+
+  const colMap = {
+    cpu_usage          : ['CPU Usage', '%',  C.cpu],
+    memory_usage       : ['Memory Usage', '%', C.mem],
+    disk_usage         : ['Disk Usage', '%', C.disk],
+    network_latency_ms : ['Network Latency', 'ms', C.lat],
+  };
+
+  // Stats table
+  const rows = Object.entries(colMap).map(([k, [name, unit, color]]) => {
+    const s = stats[k];
+    return `<tr>
+      <td style="color:${color};font-weight:700">${name}</td>
+      <td class="stat-val">${s.mean} ${unit}</td>
+      <td class="stat-val">${s.std}</td>
+      <td class="stat-val">${s.min}</td>
+      <td class="stat-val">${s.p25}</td>
+      <td class="stat-val">${s.p50}</td>
+      <td class="stat-val">${s.p75}</td>
+      <td class="stat-val">${s.p95}</td>
+      <td class="stat-val">${s.max}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('statsTableWrap').innerHTML = `
+    <table class="stat-table">
+      <thead><tr>
+        <th>Metric</th><th>Mean</th><th>Std Dev</th>
+        <th>Min</th><th>P25</th><th>P50</th><th>P75</th><th>P95</th><th>Max</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+
+  // Summary table
+  document.getElementById('summaryTableWrap').innerHTML = `
+    <table>
+      <thead><tr><th>Metric</th><th>Z-Score</th><th>IForest</th></tr></thead>
+      <tbody>
+        <tr><td>Total Detected</td>    <td class="stat-val">${ov.zscore_detected}</td>    <td class="stat-val">${ov.iforest_detected}</td></tr>
+        <tr><td>True Positives</td>    <td class="stat-val">${ov.zscore_detected - (ov.zscore_detected - ov.both_detected)}</td><td class="stat-val">${ov.iforest_detected - (ov.iforest_detected - ov.both_detected)}</td></tr>
+        <tr><td>Recall</td>            <td class="stat-val">${ov.zscore_recall_pct}%</td>  <td class="stat-val">${ov.iforest_recall_pct}%</td></tr>
+        <tr><td>Precision</td>         <td class="stat-val">${ov.zscore_precision}%</td>  <td class="stat-val">${ov.iforest_precision}%</td></tr>
+        <tr><td>Injected (Ground Truth)</td><td colspan="2" class="stat-val">${ov.injected_anomalies}</td></tr>
+        <tr><td>Both Agreed</td>       <td colspan="2" class="stat-val">${ov.both_detected}</td></tr>
+      </tbody>
+    </table>`;
+
+  // Box chart
+  const colKeys = Object.keys(colMap);
+  const colLabels = colKeys.map(k => colMap[k][0]);
+  const colColours = colKeys.map(k => colMap[k][2]);
+
+  // Build fake box data using percentiles
+  const boxData = colKeys.map(k => {
+    const s = stats[k];
+    return { min: s.min, q1: s.p25, median: s.p50, q3: s.p75, max: s.max };
+  });
+
+  // Render as floating bar chart (P25->P75) with whiskers
+  mkChart('boxChart', {
+    type: 'bar',
+    data: {
+      labels: colLabels,
+      datasets: [
+        {
+          label: 'IQR (P25–P75)',
+          data: boxData.map(b => [b.q1, b.q3]),
+          backgroundColor: colColours.map(c => c + '55'),
+          borderColor: colColours,
+          borderWidth: 2,
+          borderSkipped: false,
+        },
+        {
+          label: 'Median',
+          type: 'scatter',
+          data: boxData.map((b, i) => ({ x: i, y: b.median })),
+          parsing: false,
+          backgroundColor: colColours,
+          pointRadius: 6,
+          pointStyle: 'line',
+          pointBorderColor: colColours,
+          pointBorderWidth: 3,
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: C.text } } },
+      scales: {
+        x: { grid: { color: C.grid }, ticks: { color: C.text } },
+        y: { grid: { color: C.grid }, ticks: { color: C.text } },
+      }
+    }
+  });
+}
+
+// ══════════════════════════════════════════════════════════════
+// INIT — load everything on page ready
+// ══════════════════════════════════════════════════════════════
+
+(async () => {
+  await loadOverview();
+
+  // Wire up section nav to lazy-load charts when first visited
+  const loaded = { overview: true, timeseries: false, alerts: false, analytics: false, statistics: false };
+
+  document.querySelectorAll('.nav-item').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const sec = btn.dataset.section;
+      if (loaded[sec]) return;
+      loaded[sec] = true;
+      if (sec === 'timeseries') loadTimeSeries();
+      if (sec === 'alerts')     await loadAlerts();
+      if (sec === 'analytics')  await loadAnalytics();
+      if (sec === 'statistics') await loadStatistics();
+    });
+  });
+})();
+</script>
+</body>
+</html>
