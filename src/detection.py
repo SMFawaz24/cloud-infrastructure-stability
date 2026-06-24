@@ -23,9 +23,7 @@ warnings.filterwarnings("ignore")
 METRIC_COLS = ["cpu_usage", "memory_usage", "disk_usage", "network_latency_ms"]
 
 
-# ─────────────────────────────────────────────────────────────────
 # DATA GENERATION
-# ─────────────────────────────────────────────────────────────────
 
 def generate_metrics(n_points: int = 200, random_seed: int = 42):
     """
