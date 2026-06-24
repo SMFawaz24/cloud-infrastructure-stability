@@ -1,4 +1,4 @@
-# src package
+
 from .detection import (
     METRIC_COLS,
     generate_metrics,
