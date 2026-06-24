@@ -75,7 +75,7 @@ pip install -r requirements.txt
 
 ### Web dashboard (recommended)
 
-Starts the Flask server and opens the full analytics dashboard.
+// Starts the Flask server and opens the full analytics dashboard.
 
 ```bash
 python webapp/server.py
