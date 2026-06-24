@@ -2,10 +2,7 @@
 
 A time-series anomaly detection system for cloud infrastructure metrics, built with a Flask web dashboard, Z-Score statistical detection, and an Isolation Forest machine learning model. Includes MLflow experiment tracking and an optional Hugging Face Spaces deployment.
 
-**Shreyans Modi — RA2311026010720**  
-**Syed Mohammad Fawaz — RA2311026010780**  
-SRM Institute of Science and Technology  
-B.Tech Computer Science and Engineering, 2024
+Done by **Shreyans Modi** & **Syed Mohammad Fawaz**
 
 ---
 
